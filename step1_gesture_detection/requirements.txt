@@ -1,0 +1,5 @@
+# Step 1 – Gesture Detection dependencies
+# Install with:  pip install -r requirements.txt
+
+opencv-python>=4.8.0
+mediapipe==0.10.9
