@@ -1,4 +1,6 @@
-#Make sure the file path in terminal point to step1_gesture_detection
+#Make sure the file path in terminal point to step3_spark_consumer
+
+# 0.docker-compose up -d            # start all 6 services
 
 # 1.pip install -r requirements.txt 
 #If any module is miss, don't forgot to import.
