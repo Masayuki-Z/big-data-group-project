@@ -1,0 +1,13 @@
+# Step 3 – Spark Consumer dependencies
+# Install with:  pip install -r requirements.txt
+
+# Step 1 deps
+opencv-python>=4.8.0
+mediapipe==0.10.9
+
+# Step 2 deps
+kafka-python>=2.0.2
+
+# Step 3 deps
+pyspark==3.5.0
+pymongo>=4.6.0

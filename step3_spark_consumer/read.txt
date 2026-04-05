@@ -1,0 +1,7 @@
+
+
+where python
+
+replace the path of python
+
+set PYSPARK_PYTHON= path

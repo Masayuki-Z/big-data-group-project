@@ -1,0 +1,164 @@
+# ──────────────────────────────────────────────────────────────
+# CCTV Alert System – COMPLETE STACK  (Steps 2 + 3)
+# Fixed: DataNode now advertises localhost so Spark on Windows
+#        can write data blocks directly.
+#
+# Web UIs (browser):
+#   Kafka UI  → http://localhost:8080
+#   HDFS UI   → http://localhost:9870
+#   Mongo UI  → http://localhost:8081  (admin / admin)
+#
+# Usage:
+#   docker-compose down -v     ← wipe old broken state first
+#   docker-compose up -d
+#   docker-compose ps          ← wait until all show "healthy"
+# ──────────────────────────────────────────────────────────────
+
+services:
+
+  # ════════════════════════════════════════════
+  # KAFKA STACK
+  # ════════════════════════════════════════════
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: cctv-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: cctv-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS:            INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 2
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka:29092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: cctv-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: cctv-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      DYNAMIC_CONFIG_ENABLED: "true"
+
+  # ════════════════════════════════════════════
+  # HADOOP HDFS
+  # FIX: DataNode now exposes ports 9864/9866/9867
+  #      and advertises "localhost" as its hostname
+  #      so Spark running on Windows can reach it.
+  # ════════════════════════════════════════════
+
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: cctv-namenode
+    ports:
+      - "9870:9870"     # HDFS Web UI  ← browser
+      - "9000:9000"     # HDFS RPC     ← Spark
+    environment:
+      - CLUSTER_NAME=cctv-cluster
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - CORE_CONF_hadoop_http_staticuser_user=root
+      - HDFS_CONF_dfs_replication=1
+      - HDFS_CONF_dfs_namenode_datanode_registration_ip___hostname___check=false
+      # Tell clients (Spark) to use the hostname the DataNode reports
+      - HDFS_CONF_dfs_client_use__datanode__hostname=true
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9870"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: cctv-datanode
+    depends_on:
+      namenode:
+        condition: service_healthy
+    ports:
+      # FIX: expose DataNode ports so Spark on Windows can reach them
+      - "9864:9864"     # DataNode HTTP
+      - "9866:9866"     # DataNode data transfer  ← Spark writes blocks here
+      - "9867:9867"     # DataNode IPC
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - HDFS_CONF_dfs_replication=1
+      # FIX: advertise "localhost" so Spark on Windows resolves correctly
+      - HDFS_CONF_dfs_datanode_hostname=localhost
+      - HDFS_CONF_dfs_datanode_address=0.0.0.0:9866
+      - HDFS_CONF_dfs_datanode_http_address=0.0.0.0:9864
+      - HDFS_CONF_dfs_datanode_ipc_address=0.0.0.0:9867
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+
+  # ════════════════════════════════════════════
+  # MONGODB
+  # ════════════════════════════════════════════
+
+  mongodb:
+    image: mongo:7.0
+    container_name: cctv-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: cctv-mongo-ui
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
+    restart: unless-stopped
+
+volumes:
+  hadoop_namenode:
+  hadoop_datanode:
+  mongo_data:
