@@ -5,7 +5,10 @@
 
 
 
-# 2.running the program by:    python main.py
+# 2.running the program by:    
+2.1 submit.bat (cmd terminal)
+
+2.2 python main.py (on other cmd terminal)
 #-Displaying two windows, one from webcam of device and the other from usb webcam.
 
 
