@@ -10,6 +10,12 @@
 # 2.running the program by:    
 2.1 submit.bat (cmd terminal)
 
+++ถ้ามีerror++
+พิมพ์คำสั่ง where python
+
+แทนที่ file path ที่ได้ไปยัง [path]
+set PYSPARK_PYTHON= [path]
+
 2.2 python main.py (on other cmd terminal)
 #-Displaying two windows, one from webcam of device and the other from usb webcam.
 
